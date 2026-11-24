@@ -11,6 +11,9 @@ permissions:
   security-events: write
 
 jobs:
+  # ==========================================
+  # JOB 1 : SAST (Static Application Security Testing)
+  # ==========================================
   sast-semgrep:
     name: 1. SAST - Semgrep Scan
     runs-on: ubuntu-latest
@@ -33,12 +36,45 @@ jobs:
             --sarif --output /src/reports/semgrep-report.sarif \
             routes models lib frontend/src || true
 
-          ls -lh reports/
-
       - name: Upload SAST Reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: sast-semgrep-reports
+          path: reports/
+          if-no-files-found: error
+
+  # ==========================================
+  # JOB 2 : SCA (Software Composition Analysis)
+  # ==========================================
+  sca-grype:
+    name: 2. SCA - Grype Dependency Scan
+    runs-on: ubuntu-latest
+    steps:
+      # Récupération du code source (package.json, package-lock.json, etc.)
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Préparation du dossier des rapports
+      - name: Prepare reports directory
+        run: mkdir -p reports
+
+      # Installation de Grype CLI depuis le script officiel Anchore
+      - name: Install Grype
+        run: curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin
+
+      # Analyse des dépendances du dépôt (dir:.) et génération des rapports JSON + SARIF
+      - name: Run Grype SCA Scan
+        run: |
+          grype dir:. -o json --file reports/grype-report.json
+          grype dir:. -o sarif --file reports/grype-report.sarif
+          ls -lh reports/
+
+      # Sauvegarde des rapports SCA dans les Artifacts GitHub Actions
+      - name: Upload SCA Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sca-grype-reports
           path: reports/
           if-no-files-found: error
