@@ -51,30 +51,73 @@ jobs:
     name: 2. SCA - Grype Dependency Scan
     runs-on: ubuntu-latest
     steps:
-      # Récupération du code source (package.json, package-lock.json, etc.)
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Préparation du dossier des rapports
       - name: Prepare reports directory
         run: mkdir -p reports
 
-      # Installation de Grype CLI depuis le script officiel Anchore
       - name: Install Grype
         run: curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh | sh -s -- -b /usr/local/bin
 
-      # Analyse des dépendances du dépôt (dir:.) et génération des rapports JSON + SARIF
       - name: Run Grype SCA Scan
         run: |
           grype dir:. -o json --file reports/grype-report.json
           grype dir:. -o sarif --file reports/grype-report.sarif
-          ls -lh reports/
 
-      # Sauvegarde des rapports SCA dans les Artifacts GitHub Actions
       - name: Upload SCA Reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: sca-grype-reports
+          path: reports/
+          if-no-files-found: error
+
+  # ==========================================
+  # JOB 3 : DAST (Dynamic Application Security Testing)
+  # ==========================================
+  dast-zap:
+    name: 3. DAST - OWASP ZAP Scan
+    runs-on: ubuntu-latest
+    steps:
+      # Création du dossier reports avec droits d'écriture pour ZAP
+      - name: Prepare reports directory
+        run: mkdir -p reports && chmod 777 reports
+
+      # Démarrage de l'environnement de test (Juice Shop) sur le réseau host
+      - name: Start Juice Shop Test Environment
+        run: |
+          docker run -d --name juice-shop-test -p 3000:3000 bkimminich/juice-shop
+          echo "Attente du démarrage de Juice Shop..."
+          for i in {1..30}; do
+            if curl -s http://localhost:3000 > /dev/null; then
+              echo "Juice Shop est prêt sur http://localhost:3000 !"
+              break
+            fi
+            sleep 2
+          done
+
+      # Exécution du scan dynamique OWASP ZAP contre l'application en cours d'exécution
+      - name: Run OWASP ZAP Baseline Scan
+        run: |
+          docker run --rm --network="host" \
+            -v "${{ github.workspace }}/reports:/zap/wrk/:rw" \
+            ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
+            -t http://localhost:3000 \
+            -J zap-report.json \
+            -r zap-report.html || true
+          ls -lh reports/
+
+      # Arrêt et nettoyage du conteneur de test
+      - name: Stop Test Environment
+        if: always()
+        run: docker stop juice-shop-test && docker rm juice-shop-test || true
+
+      # Sauvegarde des rapports DAST dans les Artifacts
+      - name: Upload DAST Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dast-zap-reports
           path: reports/
           if-no-files-found: error
