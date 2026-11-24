@@ -1,0 +1,40 @@
+name: DevSecOps Pipeline (SAST - SCA - DAST)
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  sast-semgrep:
+    name: 1. SAST - Semgrep Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Semgrep
+        run: pip install semgrep
+
+      - name: Run Semgrep SAST
+        run: |
+          mkdir -p reports
+          semgrep scan \
+            --config p/security-audit \
+            --config p/javascript \
+            --config p/typescript \
+            --json -o reports/semgrep-report.json \
+            --sarif -o reports/semgrep-report.sarif \
+            . || true
+
+      - name: Upload SAST Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sast-semgrep-reports
+          path: reports/
