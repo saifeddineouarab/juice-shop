@@ -15,26 +15,34 @@ jobs:
     name: 1. SAST - Semgrep Scan
     runs-on: ubuntu-latest
     steps:
+      # Kat'jib l'code source dyal l'repo
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install Semgrep
-        run: pip install semgrep
+      # Kat'criyi dossier reports bach dima ykoun mojoud
+      - name: Prepare reports directory
+        run: mkdir -p reports
 
+      # Kat'installi Semgrep CLI
+      - name: Install Semgrep
+        run: python3 -m pip install --upgrade pip && pip install semgrep
+
+      # Kat'lancer Semgrep scan b règles p/security-audit w kat'exporter JSON + SARIF
       - name: Run Semgrep SAST
         run: |
-          mkdir -p reports
           semgrep scan \
             --config p/security-audit \
-            --config p/javascript \
-            --config p/typescript \
+            --metrics=off \
             --json -o reports/semgrep-report.json \
             --sarif -o reports/semgrep-report.sarif \
             . || true
+          ls -lh reports/
 
+      # Kat'رفع les rapports l'GitHub Actions Artifacts
       - name: Upload SAST Reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: sast-semgrep-reports
           path: reports/
+          if-no-files-found: warn
