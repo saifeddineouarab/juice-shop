@@ -15,26 +15,26 @@ jobs:
     name: 1. SAST - Semgrep Scan
     runs-on: ubuntu-latest
     steps:
-      # Récupération du code source
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Création du dossier reports avec permissions ouvertes pour le conteneur Docker
       - name: Prepare reports directory
         run: mkdir -p reports && chmod 777 reports
 
-      # Exécution de Semgrep via son image Docker officielle
       - name: Run Semgrep SAST
         run: |
-          docker run --rm -v "${{ github.workspace }}:/src" semgrep/semgrep semgrep scan \
-            --config p/security-audit \
-            --metrics=off \
-            --json -o /src/reports/semgrep-report.json \
-            --sarif -o /src/reports/semgrep-report.sarif \
-            /src || true
+          docker run --rm --user root -v "${{ github.workspace }}:/src" -w /src semgrep/semgrep \
+            semgrep scan --config p/security-audit --metrics=off \
+            --json --output /src/reports/semgrep-report.json \
+            routes models lib frontend/src || true
+
+          docker run --rm --user root -v "${{ github.workspace }}:/src" -w /src semgrep/semgrep \
+            semgrep scan --config p/security-audit --metrics=off \
+            --sarif --output /src/reports/semgrep-report.sarif \
+            routes models lib frontend/src || true
+
           ls -lh reports/
 
-      # Upload des rapports générés vers les Artifacts GitHub Actions
       - name: Upload SAST Reports
         if: always()
         uses: actions/upload-artifact@v4
